@@ -51,9 +51,14 @@ Remove-Item -Recurse -Force $stageRoot
 Write-Host ("Paket boyutu: {0:N1} MB" -f ((Get-Item $zip).Length/1MB))
 
 # GitHub token'i yerel credential manager'dan al (yazdirilmaz)
-$credOut = "protocol=https`nhost=github.com`n" | git credential fill
+# Not: git credential fill stdin'i .NET/PowerShell pipe'indan okuyamiyor; Git'in bash'i uzerinden okunur.
+$gitCmd = (Get-Command git).Source
+$bash = Join-Path (Split-Path (Split-Path $gitCmd)) "bin\bash.exe"
+if(-not (Test-Path $bash)) { $bash = "C:\Program Files\Git\bin\bash.exe" }
+if(-not (Test-Path $bash)) { Write-Host "[HATA] Git bash bulunamadi."; exit 1 }
+$credOut = & $bash -c "printf 'protocol=https\nhost=github.com\n\n' | git credential fill"
 $token = ""
-foreach($line in $credOut) { if("$line" -like "password=*") { $token = "$line".Substring(9) } }
+foreach($line in @($credOut)) { $t = "$line".Trim(); if($t -like "password=*") { $token = $t.Substring(9) } }
 if(-not $token) { Write-Host "[HATA] GitHub kimligi alinamadi. Bir kez 'git push' yapip giris yapin."; exit 1 }
 $headers = @{ Authorization = "Bearer $token"; "User-Agent" = "ElysiumClient-release"; Accept = "application/vnd.github+json" }
 
